@@ -1,0 +1,6 @@
+---
+- name: Installation Znuny
+  hosts: all
+  become: yes
+  roles:
+    - common

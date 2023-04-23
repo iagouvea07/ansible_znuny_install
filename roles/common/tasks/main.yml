@@ -1,0 +1,96 @@
+- name: Install Essential Applications
+  apt:
+    name: "{{ essential_applications }}"
+    state: latest
+
+- name: Install PyMySQL
+  pip:
+    name: pymysql
+    state: present
+
+- name: Download Znuny
+  get_url:
+    url: https://download.znuny.org/releases/znuny-latest-6.4.tar.gz
+    dest: /opt/znuny-latest-6.4.tar.gz
+
+- name: Extract GZIP File
+  unarchive:
+    src: /opt/znuny-latest-6.4.tar.gz
+    dest: /opt/
+    remote_src: yes
+
+- name: Create otrs Directory
+  copy:
+    src: /opt/znuny-6.4.5/
+    dest: /opt/otrs/
+    remote_src: yes
+
+- name: Add otrs User
+  user:
+    name: otrs
+    shell: /bin/bash
+    groups: www-data
+    comment: "Znuny user"
+    home: /opt/otrs
+
+- name: Copy Default Config
+  copy:
+    src: /opt/otrs/Kernel/Config.pm.dist
+    dest: /opt/otrs/Kernel/Config.pm
+    remote_src: yes
+
+- name: Set Permissions
+  shell: "/opt/otrs/bin/otrs.SetPermissions.pl"
+
+- name: Copy aaa_base
+  copy:
+    src: /opt/otrs/var/cron/aaa_base.dist
+    dest: /opt/otrs/var/cron/aaa_base
+    remote_src: yes
+
+- name: Copy otrs_daemon
+  copy:
+    src: /opt/otrs/var/cron/otrs_daemon.dist
+    dest: /opt/otrs/var/cron/otrs_daemon
+    remote_src: yes
+
+- name: Install Perl Modules
+  apt:
+    name: "{{ perl_modules }}"
+    state: latest
+
+- name: Copy Mariadb Config File
+  copy:
+    src: 50-znuny_config.cnf
+    dest: /etc/mysql/mariadb.conf.d/
+
+- name: Create Apache Config Symbolic Link
+  file:
+    src: /opt/otrs/scripts/apache2-httpd.include.conf
+    dest: /etc/apache2/conf-available/zzz_znuny.conf
+    state: link
+
+- name: Copy Apache Modules Script
+  copy:
+    src: apache_mod.sh
+    dest: /opt/otrs/bin
+
+- name: Enable Apache Modules
+  shell: "bash /opt/otrs/bin/apache_mod.sh"
+  notify: Restart Apache
+
+- name: Create Znuny Database
+  community.mysql.mysql_db:
+    name: znuny
+    state: present
+    encoding: utf8
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Create Znuny User
+  community.mysql.mysql_user:
+    name: znuny
+    password: "{{ znuny_password }}"
+    priv: "znuny.*: ALL"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  notify: Restart Mariadb
